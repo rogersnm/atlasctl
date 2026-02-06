@@ -1,0 +1,25 @@
+{
+  "name": "atlasctl",
+  "version": "0.3.1",
+  "description": "Atlassian CLI for Confluence page exports with comments",
+  "type": "module",
+  "bin": {
+    "atlasctl": "dist/cli.js"
+  },
+  "files": [
+    "dist/cli.js"
+  ],
+  "scripts": {
+    "dev": "bun run src/main.ts",
+    "build": "rm -rf dist && mkdir dist && bun build src/main.ts --outfile dist/cli.js --target node --format esm && printf '#!/usr/bin/env node\\n' | cat - dist/cli.js > dist/cli.tmp && mv dist/cli.tmp dist/cli.js && chmod +x dist/cli.js",
+    "prepublishOnly": "bun run build",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@modeltoolsprotocol/sdk": "0.4.1",
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
