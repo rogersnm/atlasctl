@@ -1,7 +1,7 @@
 {
   "name": "atlasctl",
-  "version": "0.3.1",
-  "description": "Atlassian CLI for Confluence page exports with comments",
+  "version": "0.4.0",
+  "description": "Atlassian CLI for Confluence and Jira",
   "type": "module",
   "bin": {
     "atlasctl": "dist/cli.js"
@@ -17,7 +17,8 @@
   },
   "dependencies": {
     "@modeltoolsprotocol/sdk": "0.4.1",
-    "commander": "^14.0.3"
+    "commander": "^14.0.3",
+    "marklassian": "^1.1.0"
   },
   "devDependencies": {
     "@types/bun": "latest"

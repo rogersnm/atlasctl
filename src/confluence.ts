@@ -1,10 +1,11 @@
-import type { Comment, PageExport, RequiredConfig } from "./types";
-
-interface ApiClient {
-  baseUrl: string;
-  apiGet: (pathOrUrl: string) => Promise<any>;
-  fetchAllPages: (path: string) => Promise<any[]>;
-}
+import { createApiClient, type ApiClient } from "./api-client";
+import type {
+  Comment,
+  CreatePageInput,
+  CreatePageResult,
+  PageExport,
+  RequiredConfig,
+} from "./types";
 
 interface ParsedPageInput {
   pageId: string;
@@ -31,7 +32,9 @@ export function parsePageInput(idOrUrl: string): ParsedPageInput {
   const pageId = fromPath ?? fromQuery;
 
   if (!pageId || !/^\d+$/.test(pageId)) {
-    throw new Error("Could not extract a numeric page ID from the provided URL.");
+    throw new Error(
+      "Could not extract a numeric page ID from the provided URL.",
+    );
   }
 
   return {
@@ -46,13 +49,41 @@ export function resolvePageIdForSite(
 ): string {
   const parsed = parsePageInput(idOrUrl);
 
-  if (parsed.hostFromUrl && parsed.hostFromUrl !== configuredSite.toLowerCase()) {
+  if (
+    parsed.hostFromUrl &&
+    parsed.hostFromUrl !== configuredSite.toLowerCase()
+  ) {
     throw new Error(
       `URL host mismatch: URL uses ${parsed.hostFromUrl} but config site is ${configuredSite}.`,
     );
   }
 
   return parsed.pageId;
+}
+
+/**
+ * Extract a numeric page ID from a page ID string or Confluence URL.
+ * Accepts raw numeric IDs or full URLs containing /pages/<id>.
+ */
+export function parseParentId(idOrUrl: string): string {
+  const value = idOrUrl.trim();
+  if (/^\d+$/.test(value)) {
+    return value;
+  }
+
+  try {
+    const url = new URL(value);
+    const match = url.pathname.match(/\/pages\/(\d+)(?:\/|$)/);
+    if (match) {
+      return match[1];
+    }
+  } catch {
+    // not a URL, fall through
+  }
+
+  throw new Error(
+    `Invalid parent page identifier "${value}". Provide a numeric page ID or a Confluence page URL.`,
+  );
 }
 
 function countComments(comments: Comment[]): number {
@@ -88,66 +119,10 @@ function parseComment(raw: any): Comment {
   };
 }
 
-function normalizePaginationLink(next: string): string {
-  if (next.startsWith("http://") || next.startsWith("https://")) {
-    return next;
-  }
-
-  if (next.startsWith("/wiki/")) {
-    return next.slice("/wiki".length);
-  }
-
-  return next;
-}
-
-function createClient(config: RequiredConfig): ApiClient {
-  const baseUrl = `https://${config.site}/wiki`;
-  const auth = Buffer.from(`${config.email}:${config.apikey}`).toString("base64");
-
-  const headers = {
-    Authorization: `Basic ${auth}`,
-    Accept: "application/json",
-  };
-
-  async function apiGet(pathOrUrl: string): Promise<any> {
-    const url =
-      pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")
-        ? pathOrUrl
-        : `${baseUrl}${pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`}`;
-
-    const response = await fetch(url, { headers });
-
-    if (!response.ok) {
-      throw new Error(`Confluence API error ${response.status} ${response.statusText}: GET ${url}`);
-    }
-
-    return response.json();
-  }
-
-  async function fetchAllPages(path: string): Promise<any[]> {
-    const results: any[] = [];
-    let next: string | null = path;
-
-    while (next) {
-      const page = await apiGet(next);
-      if (Array.isArray(page.results)) {
-        results.push(...page.results);
-      }
-
-      next = page._links?.next ? normalizePaginationLink(page._links.next) : null;
-    }
-
-    return results;
-  }
-
-  return {
-    baseUrl,
-    apiGet,
-    fetchAllPages,
-  };
-}
-
-async function fetchReplies(client: ApiClient, commentId: string): Promise<Comment[]> {
+async function fetchReplies(
+  client: ApiClient,
+  commentId: string,
+): Promise<Comment[]> {
   const rawReplies = await client.fetchAllPages(
     `/rest/api/content/${commentId}/child/comment?expand=body.storage,version,extensions.inlineProperties,extensions.resolution&limit=100`,
   );
@@ -167,7 +142,7 @@ export async function fetchConfluencePage(
   idOrUrl: string,
 ): Promise<PageExport> {
   const pageId = resolvePageIdForSite(idOrUrl, config.site);
-  const client = createClient(config);
+  const client = createApiClient(config, "/wiki");
 
   const page = await client.apiGet(
     `/rest/api/content/${pageId}?expand=body.storage,version,history,space,metadata.labels`,
@@ -194,7 +169,9 @@ export async function fetchConfluencePage(
       created: page.history?.createdDate ?? page.version?.when ?? "",
       lastUpdated: page.version?.when ?? "",
       version: page.version?.number ?? 1,
-      labels: (page.metadata?.labels?.results ?? []).map((label: any) => label.name),
+      labels: (page.metadata?.labels?.results ?? []).map(
+        (label: any) => label.name,
+      ),
       bodyHtml: page.body?.storage?.value ?? "",
     },
     comments,
@@ -202,5 +179,50 @@ export async function fetchConfluencePage(
       fetchedAt: new Date().toISOString(),
       totalComments: countComments(comments),
     },
+  };
+}
+
+export async function resolveSpaceId(
+  client: ApiClient,
+  spaceKey: string,
+): Promise<string> {
+  const data = await client.apiGet(
+    `/api/v2/spaces?keys=${encodeURIComponent(spaceKey)}&limit=1`,
+  );
+
+  if (!data.results?.length) {
+    throw new Error(`Confluence space "${spaceKey}" not found.`);
+  }
+
+  return data.results[0].id;
+}
+
+export async function createConfluencePage(
+  config: RequiredConfig,
+  input: CreatePageInput,
+): Promise<CreatePageResult> {
+  const client = createApiClient(config, "/wiki");
+  const spaceId = await resolveSpaceId(client, input.spaceKey);
+
+  const body: Record<string, unknown> = {
+    spaceId,
+    title: input.title,
+    body: {
+      representation: "markdown",
+      value: input.bodyMarkdown,
+    },
+  };
+
+  if (input.parentId) {
+    body.parentId = input.parentId;
+  }
+
+  const result = await client.apiPost("/api/v2/pages", body);
+
+  return {
+    id: result.id,
+    title: result.title,
+    space: input.spaceKey,
+    url: `${client.baseUrl}${result._links?.webui ?? ""}`,
   };
 }

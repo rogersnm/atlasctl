@@ -8,7 +8,7 @@ describe("--describe", () => {
 
     expect(schema.specVersion).toBe("2026-02-07");
     expect(schema.name).toBe("atlasctl");
-    expect(schema.version).toBe("0.3.1");
+    expect(schema.version).toBe("0.4.0");
     expect(typeof schema.description).toBe("string");
     expect(Array.isArray(schema.commands)).toBe(true);
   });
@@ -22,6 +22,8 @@ describe("--describe", () => {
     expect(names).toContain("config get");
     expect(names).toContain("config show");
     expect(names).toContain("confluence page get");
+    expect(names).toContain("confluence page create");
+    expect(names).toContain("jira issue create");
   });
 
   it("has examples for every command", () => {

@@ -10,10 +10,16 @@ import {
   setConfigValue,
   writeConfig,
 } from "./config";
-import { fetchConfluencePage } from "./confluence";
+import { resolveContent } from "./content-input";
+import {
+  createConfluencePage,
+  fetchConfluencePage,
+  parseParentId,
+} from "./confluence";
+import { createJiraIssue } from "./jira";
 import { withDescribe, type DescribeOptions } from "@modeltoolsprotocol/sdk";
 
-const VERSION = "0.3.1";
+const VERSION = "0.4.0";
 
 function parseConfigKey(value: string): ConfigKey {
   if (!CONFIG_KEYS.includes(value as ConfigKey)) {
@@ -127,6 +133,67 @@ async function handlePageFetch(
   process.stdout.write(json);
 }
 
+async function handlePageCreate(options: {
+  space: string;
+  title: string;
+  parent?: string;
+  body?: string;
+  bodyFile?: string;
+  pretty?: boolean;
+}): Promise<void> {
+  const config = requireFetchConfig(await readConfig());
+  const bodyMarkdown = await resolveContent(options.body, options.bodyFile);
+  const parentId = options.parent ? parseParentId(options.parent) : undefined;
+
+  const result = await createConfluencePage(config, {
+    spaceKey: options.space,
+    title: options.title,
+    parentId,
+    bodyMarkdown,
+  });
+
+  const json = options.pretty
+    ? `${JSON.stringify(result, null, 2)}\n`
+    : `${JSON.stringify(result)}\n`;
+  process.stdout.write(json);
+}
+
+async function handleJiraIssueCreate(options: {
+  project: string;
+  summary: string;
+  type: string;
+  description?: string;
+  descriptionFile?: string;
+  priority?: string;
+  labels?: string;
+  assignee?: string;
+  pretty?: boolean;
+}): Promise<void> {
+  const config = requireFetchConfig(await readConfig());
+  const descriptionMarkdown = await resolveContent(
+    options.description,
+    options.descriptionFile,
+  );
+  const labels = options.labels
+    ? options.labels.split(",").map((l) => l.trim()).filter(Boolean)
+    : undefined;
+
+  const result = await createJiraIssue(config, {
+    projectKey: options.project,
+    summary: options.summary,
+    issueType: options.type,
+    descriptionMarkdown: descriptionMarkdown || undefined,
+    priority: options.priority,
+    labels,
+    assignee: options.assignee,
+  });
+
+  const json = options.pretty
+    ? `${JSON.stringify(result, null, 2)}\n`
+    : `${JSON.stringify(result)}\n`;
+  process.stdout.write(json);
+}
+
 async function handleConfigSetCommand(key?: string, value?: string): Promise<void> {
   if (!key && !value) {
     await handleConfigSetGuided();
@@ -216,6 +283,47 @@ export const DESCRIBE_OPTIONS: DescribeOptions = {
         { description: "Fetch by URL, save to file", command: "atlasctl confluence page get https://your-domain.atlassian.net/wiki/spaces/ENG/pages/12345 --output page.json" },
       ],
     },
+    "confluence page create": {
+      stdout: {
+        contentType: "application/json",
+        description: "Created page metadata: id, title, space, url",
+        schema: {
+          type: "object",
+          required: ["id", "title", "space", "url"],
+          properties: {
+            id: { type: "string" },
+            title: { type: "string" },
+            space: { type: "string" },
+            url: { type: "string" },
+          },
+        },
+      },
+      examples: [
+        { description: "Create a page in ENG space", command: "atlasctl confluence page create --space ENG --title 'My Page' --body '# Hello'" },
+        { description: "Create from file with parent", command: "atlasctl confluence page create --space ENG --title 'Child Page' --parent 12345 --body-file content.md --pretty" },
+      ],
+    },
+    "jira issue create": {
+      stdout: {
+        contentType: "application/json",
+        description: "Created issue metadata: key, id, url, summary",
+        schema: {
+          type: "object",
+          required: ["key", "id", "url", "summary"],
+          properties: {
+            key: { type: "string" },
+            id: { type: "string" },
+            url: { type: "string" },
+            summary: { type: "string" },
+          },
+        },
+      },
+      examples: [
+        { description: "Create a task", command: "atlasctl jira issue create --project PROJ --summary 'Fix login bug' --type Task" },
+        { description: "Create with description and priority", command: "atlasctl jira issue create --project PROJ --summary 'Add dark mode' --type Story --description '# Requirements\n\nSupport dark theme' --priority High" },
+        { description: "Create with labels and assignee", command: "atlasctl jira issue create --project PROJ --summary 'Update deps' --type Task --labels 'tech-debt,chore' --assignee 5b10ac8d82e05b22cc7d4ef5" },
+      ],
+    },
   },
 };
 
@@ -224,7 +332,7 @@ export function buildProgram(): Command {
 
   program
     .name("atlasctl")
-    .description("Atlassian CLI for Confluence page exports")
+    .description("Atlassian CLI for Confluence and Jira")
     .version(VERSION)
     .showHelpAfterError();
 
@@ -267,6 +375,38 @@ export function buildProgram(): Command {
     .option("--pretty", "pretty-print JSON output")
     .action(async (idOrUrl: string, options: { output?: string; pretty?: boolean }) => {
       await handlePageFetch(idOrUrl, options);
+    });
+
+  pageCommand
+    .command("create")
+    .description("Create a Confluence page from markdown")
+    .requiredOption("--space <key>", "space key, e.g. ENG")
+    .requiredOption("--title <title>", "page title")
+    .option("--parent <id-or-url>", "parent page ID or URL")
+    .option("--body <markdown>", "page body as markdown")
+    .option("--body-file <file>", "read page body from file")
+    .option("--pretty", "pretty-print JSON output")
+    .action(async (options) => {
+      await handlePageCreate(options);
+    });
+
+  const jiraCommand = program.command("jira").description("Jira operations");
+  const issueCommand = jiraCommand.command("issue").description("Jira issue operations");
+
+  issueCommand
+    .command("create")
+    .description("Create a Jira issue with markdown description")
+    .requiredOption("--project <key>", "project key, e.g. PROJ")
+    .requiredOption("--summary <text>", "issue summary")
+    .requiredOption("--type <name>", "issue type: Task, Bug, Story, etc.")
+    .option("--description <markdown>", "description as markdown")
+    .option("--description-file <file>", "read description from file")
+    .option("--priority <name>", "priority: High, Medium, Low, etc.")
+    .option("--labels <csv>", "comma-separated labels")
+    .option("--assignee <id>", "assignee account ID")
+    .option("--pretty", "pretty-print JSON output")
+    .action(async (options) => {
+      await handleJiraIssueCreate(options);
     });
 
   return program;
