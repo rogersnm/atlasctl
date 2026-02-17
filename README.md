@@ -1,11 +1,12 @@
 # atlasctl
 
-A Bun-based CLI for Atlassian workflows.
+A Bun-based CLI for Atlassian workflows: Confluence pages and Jira issues.
 
-Initial scope:
-- Get a Confluence page
-- Include all comments and nested replies
-- Include inline comment metadata when available
+Features:
+- Get a Confluence page with all comments and nested replies
+- Create a Confluence page from markdown
+- Create a Jira issue with markdown description (converted to ADF)
+- Inline comment metadata included when available
 
 ## Requirements
 
@@ -77,6 +78,8 @@ atlasctl config set <site|email|apikey> <value>
 atlasctl config get <site|email|apikey>
 atlasctl config show
 atlasctl confluence page get <id-or-url> [--output <file>] [--pretty]
+atlasctl confluence page create --space <key> --title <title> [--parent <id-or-url>] [--body <md>] [--body-file <file>] [--pretty]
+atlasctl jira issue create --project <key> --summary <text> --type <name> [--description <md>] [--description-file <file>] [--priority <name>] [--labels <csv>] [--assignee <id>] [--pretty]
 atlasctl --help
 atlasctl --help-llm
 atlasctl --version
@@ -101,6 +104,67 @@ Or write output to disk:
 ```bash
 atlasctl confluence page get 22982787097 --output page.json --pretty
 ```
+
+## Create a Confluence page
+
+Create a page in a space with markdown content:
+
+```bash
+atlasctl confluence page create --space ENG --title "My Page" --body "# Hello\n\nWorld" --pretty
+```
+
+Read body from a file:
+
+```bash
+atlasctl confluence page create --space ENG --title "My Page" --body-file content.md
+```
+
+Create as a child of an existing page:
+
+```bash
+atlasctl confluence page create --space ENG --title "Child Page" --parent 12345 --body "child content"
+```
+
+The `--parent` option accepts a numeric page ID or a full Confluence page URL.
+
+Body content can also be piped via stdin when neither `--body` nor `--body-file` is provided:
+
+```bash
+cat content.md | atlasctl confluence page create --space ENG --title "Piped Page"
+```
+
+Returns JSON with `id`, `title`, `space`, and `url`.
+
+## Create a Jira issue
+
+Create a task:
+
+```bash
+atlasctl jira issue create --project PROJ --summary "Fix login bug" --type Task --pretty
+```
+
+With a markdown description (converted to Atlassian Document Format automatically):
+
+```bash
+atlasctl jira issue create --project PROJ --summary "Add dark mode" --type Story \
+  --description "# Requirements\n\nSupport dark theme" --priority High
+```
+
+Read description from a file:
+
+```bash
+atlasctl jira issue create --project PROJ --summary "Detailed issue" --type Bug \
+  --description-file desc.md
+```
+
+With labels and assignee:
+
+```bash
+atlasctl jira issue create --project PROJ --summary "Update deps" --type Task \
+  --labels "tech-debt,chore" --assignee 5b10ac8d82e05b22cc7d4ef5
+```
+
+Returns JSON with `key`, `id`, `url`, and `summary`.
 
 ## URL and site matching
 

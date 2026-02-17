@@ -19,7 +19,7 @@ import {
 import { createJiraIssue } from "./jira";
 import { withDescribe, type DescribeOptions } from "@modeltoolsprotocol/sdk";
 
-const VERSION = "0.4.0";
+const VERSION = "0.4.1";
 
 function parseConfigKey(value: string): ConfigKey {
   if (!CONFIG_KEYS.includes(value as ConfigKey)) {
