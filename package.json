@@ -1,6 +1,6 @@
 {
   "name": "atlasctl",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Atlassian CLI for Confluence and Jira",
   "type": "module",
   "bin": {
@@ -19,6 +19,9 @@
     "@modeltoolsprotocol/sdk": "0.4.1",
     "commander": "^14.0.3",
     "marklassian": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "@types/bun": "latest"

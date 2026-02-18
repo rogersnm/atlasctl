@@ -8,7 +8,7 @@ describe("--describe", () => {
 
     expect(schema.specVersion).toBe("2026-02-07");
     expect(schema.name).toBe("atlasctl");
-    expect(schema.version).toBe("0.4.1");
+    expect(schema.version).toBe("0.4.2");
     expect(typeof schema.description).toBe("string");
     expect(Array.isArray(schema.commands)).toBe(true);
   });

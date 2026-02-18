@@ -1,4 +1,5 @@
 import { writeFile } from "node:fs/promises";
+import { createInterface } from "node:readline/promises";
 import { Command, InvalidArgumentError } from "commander";
 import {
   CONFIG_KEYS,
@@ -19,7 +20,7 @@ import {
 import { createJiraIssue } from "./jira";
 import { withDescribe, type DescribeOptions } from "@modeltoolsprotocol/sdk";
 
-const VERSION = "0.4.1";
+const VERSION = "0.4.2";
 
 function parseConfigKey(value: string): ConfigKey {
   if (!CONFIG_KEYS.includes(value as ConfigKey)) {
@@ -59,27 +60,32 @@ async function handleConfigSetGuided(): Promise<void> {
 
   const config = await readConfig();
   const updates: Partial<Record<ConfigKey, string>> = {};
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
 
-  for (const key of CONFIG_KEYS) {
-    while (true) {
-      const current = updates[key] ?? config[key];
-      const promptText = `${configPromptLabel(key)} [${displayCurrentConfigValue(key, current)}]: `;
-      const input = prompt(promptText)?.trim() ?? "";
-      const candidate = input || current;
+  try {
+    for (const key of CONFIG_KEYS) {
+      while (true) {
+        const current = updates[key] ?? config[key];
+        const promptText = `${configPromptLabel(key)} [${displayCurrentConfigValue(key, current)}]: `;
+        const input = (await rl.question(promptText)).trim();
+        const candidate = input || current;
 
-      if (!candidate) {
-        console.error(`${key} is required.`);
-        continue;
-      }
+        if (!candidate) {
+          console.error(`${key} is required.`);
+          continue;
+        }
 
-      try {
-        updates[key] = normalizeConfigValue(key, candidate);
-        break;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(message);
+        try {
+          updates[key] = normalizeConfigValue(key, candidate);
+          break;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error(message);
+        }
       }
     }
+  } finally {
+    rl.close();
   }
 
   const configPath = await writeConfig({

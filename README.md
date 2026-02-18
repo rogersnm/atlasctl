@@ -1,6 +1,6 @@
 # atlasctl
 
-A Bun-based CLI for Atlassian workflows: Confluence pages and Jira issues.
+CLI for Atlassian workflows: Confluence pages and Jira issues.
 
 Features:
 - Get a Confluence page with all comments and nested replies
@@ -10,11 +10,19 @@ Features:
 
 ## Requirements
 
-- Bun 1.3+
+- Node.js 18+
 
 ## Install
 
+### Global (from npm)
+
+```bash
+npm install -g atlasctl
+```
+
 ### Local development
+
+Requires [Bun](https://bun.sh) for building and testing.
 
 ```bash
 bun install
@@ -25,14 +33,6 @@ Run directly:
 ```bash
 bun run src/cli.ts --help
 ```
-
-### Global (from npm)
-
-```bash
-npm install -g atlasctl
-```
-
-The CLI entrypoint uses Bun (`#!/usr/bin/env bun`), so Bun must be installed on the target machine.
 
 ## Configuration
 
