@@ -1,3 +1,4 @@
+import { markdownToAdf } from "marklassian";
 import { createApiClient, type ApiClient } from "./api-client";
 import type {
   Comment,
@@ -208,8 +209,8 @@ export async function createConfluencePage(
     spaceId,
     title: input.title,
     body: {
-      representation: "markdown",
-      value: input.bodyMarkdown,
+      representation: "atlas_doc_format",
+      value: JSON.stringify(markdownToAdf(input.bodyMarkdown)),
     },
   };
 

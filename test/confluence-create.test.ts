@@ -126,8 +126,10 @@ describe("createConfluencePage", () => {
     expect(createReq).toBeDefined();
     expect(createReq!.body.spaceId).toBe("1234567");
     expect(createReq!.body.title).toBe("My Page");
-    expect(createReq!.body.body.representation).toBe("markdown");
-    expect(createReq!.body.body.value).toBe("# Hello\n\nWorld");
+    expect(createReq!.body.body.representation).toBe("atlas_doc_format");
+    const adf = JSON.parse(createReq!.body.body.value);
+    expect(adf.type).toBe("doc");
+    expect(adf.version).toBe(1);
   });
 
   it("includes parentId when provided", async () => {
